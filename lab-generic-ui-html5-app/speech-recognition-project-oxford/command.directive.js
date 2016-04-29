@@ -15,4 +15,4 @@ myapp.directive('command', function($http, $timeout) {
 		};
 	}
 	return directive;
-})
+});

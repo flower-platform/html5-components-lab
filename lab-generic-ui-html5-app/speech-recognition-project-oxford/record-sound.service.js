@@ -1,30 +1,7 @@
 var myapp = angular.module('appTestComponentsHtml5');
-
-myapp.directive('speechRecognizerProjectOxford', function($http, $timeout, $parse) {
-	var directive = {};
-	directive.restrict = 'E';
-	directive.template = "<button ng-click = 'record()'>{{label}}</button><br/><ng-transclude> </ng-transclude>" + 
-						"Your message is <div ng-if='textMessage'>{{textMessage}}</div>";
-	directive.scope = {
-		label: '@label'
-	};
-	
-	directive.transclude = true;
-
-	directive.link = function(scope, elem, attrs) {
-		scope.record = function() {
-			console.log("scrollRight  clicked");
-			recording = true;
-			// reset the buffers for the new recording
-			leftchannel.length = rightchannel.length = 0;
-			recordingLength = 0;
-			// if S is pressed, we stop the recording and package the WAV file
-			//promise = $interval(createAudioBufferAndSendIt, 5000);
-			$timeout(createAudioBufferAndSendIt, 2000);
-		}
-		scope.rootElem = elem;
-
-		// variables
+myapp.factory('RecordSpeechService', function($http, $timeout, $q) {
+		var factory = {};
+		var deferred;
 		var leftchannel = [];
 		var rightchannel = [];
 		var recorder = null;
@@ -51,7 +28,7 @@ myapp.directive('speechRecognizerProjectOxford', function($http, $timeout, $pars
 		} else alert('getUserMedia not supported in this browser.');
 
 
-		function createAudioBufferAndSendIt() {
+		function createAudioBuffer() {
 			// we stop recording
 			recording = false;
 			// we flat the left and right channels down
@@ -88,7 +65,8 @@ myapp.directive('speechRecognizerProjectOxford', function($http, $timeout, $pars
 				index += 2;
 			}
 			audioBuffer = new Uint8Array(view.buffer);
-			speechToTextEngine();
+			deferred.resolve( audioBuffer );
+
 
 		}
 
@@ -156,113 +134,17 @@ myapp.directive('speechRecognizerProjectOxford', function($http, $timeout, $pars
 			volume.connect(recorder);
 			recorder.connect(context.destination);
 		}
-		var clientId = 'test-app'; // Can be anything
-		var clientSecret = '919963ddb0f143009e81cc1c00046483'; // API key from Azure marketplace
-		// ==== Helpers ====
-		function getAccessToken(clientId, clientSecret, callback) {
-			var req = {
-				method: 'POST',
-				url: 'https://oxford-speech.cloudapp.net/token/issueToken',
-				data: {
-					'grant_type': 'client_credentials',
-					'client_id': encodeURIComponent(clientId),
-					'client_secret': encodeURIComponent(clientSecret),
-					'scope': 'https://speech.platform.bing.com'
-				}
-			};
-			$http(req).then(function(response) {
-				if (response.status != 200) return callback(response);
-				var accessToken = response.data.access_token;
-				if (accessToken) {
-					callback(null, accessToken);
-				} else {
-					callback(response);
-				}
-			});
-		}
-
-		function speechToText(accessToken, callback) {
-			var fd = new FormData()
-			fd.append('audio', scope.content);
-			var req = {
-				method: 'POST',
-				url: 'https://speech.platform.bing.com/recognize/query',
-				params: {
-					'scenarios': 'ulm',
-					'appid': 'D4D52672-91D7-4C74-8AD8-42B1D98141A5', // This magic value is required
-					'locale': 'en-US',
-					'device.os': 'wp7',
-					'version': '3.0',
-					'format': 'json',
-					'requestid': '1d4b6030-9099-11e0-91e4-0800200c9a66', // can be anything
-					'instanceid': '1d4b6030-9099-11e0-91e4-0800200c9a66' // can be anything
-				},
-				data: audioBuffer,
-				headers: {
-					'Authorization': 'Bearer ' + accessToken,
-					'Content-Type': 'audio/wav; samplerate=16000',
-					'Content-Length': audioBuffer.length
-				},
-				transformRequest: angular.identity
-			};
-			$http(req).then(function(resp) {
-				if (resp.status != 200) {
-					return callback(resp);
-				}
-				callback(null, resp.data);
-			});
-		}
-		
-		function checkIfValidMessage(commands, message){
-			for (var i = 0; i < commands.length; i++) {
-				if(commands[i].getAttribute('text') == message){
-					eval('angular.element(commands[i]).scope().$$childHead.' + commands[i].getAttribute('on-recognize'));
-					break;
-				}
-			}
-			if(i == commands.length){
-				console.log("Command not recognized");
-			}
-		}
-
-		function speechToTextEngine() {
-			getAccessToken(clientId, clientSecret, function(response, accessToken) {
-				if (response) {
-					console.log("Something is not ok in our response");
-				}
-				console.log('Got access token: ' + accessToken)
-				speechToText(accessToken, function(err, res) {
-					if (err) {
-						console.log("We have an error");
-						return console.log(err);
-					}
-					
-
-					if (res == null || res == undefined || res.results == null ) {
-						console.log("Something is not ok in our response");
-						return;
-					}
-					scope.textMessage = res.results[0].lexical;
-					
-					var rootElemChildren = scope.rootElem.children();
-					if (rootElemChildren == null || rootElemChildren[2] == null || rootElemChildren[2].children == null) {
-						console.log("No children commands detected");
-						return;
-					}
-					
-					var transcludeNodeChildren = rootElemChildren[2].children;
-					
-					checkIfValidMessage(transcludeNodeChildren, scope.textMessage); 
-
-					
-					
-
-				});
-			})
-		}
-	}
-
 	
+	factory.getAudioBuffer = function() {
+			deferred = $q.defer();
+			console.log("recorded started");
 
-	return directive;
-})
+			recording = true;
+			// reset the buffers for the new recording
+			leftchannel.length = rightchannel.length = 0;
+			recordingLength = 0;
+			$timeout(createAudioBuffer, 2000);
+			return deferred.promise;
+	}
+	return factory;
+});
